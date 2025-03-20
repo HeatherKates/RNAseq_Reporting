@@ -3,7 +3,7 @@ title: "BCB-SR RNA-seq Report"
 output: 
   html_document:
     toc: true
-    toc_float: true
+    toc_float: false
     number_sections: true
     theme: cosmo
     highlight: tango
