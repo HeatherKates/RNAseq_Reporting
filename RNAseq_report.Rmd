@@ -25,6 +25,8 @@ library(edgeR)
 library(qs)
 library(kableExtra)
 source("HRK_funcs.R")
+library(plotly)
+library(htmltools)
 library(downloadthis, lib.loc = "~/R/x86_64-pc-linux-gnu-library/4.2/")
 select <- dplyr::select
 ```
@@ -53,7 +55,9 @@ report_params <- parse_params("Report_params.txt")
 ```
 
 ```{r}
-suppressMessages(suppressWarnings(capture.output(source("analysis.R"), file = NULL)))
+sink(tempfile())  # Redirect all output to a temporary file
+suppressMessages(suppressWarnings(source("analysis.R")))
+sink()  # Restore output
 ```
 
 # Project Summary
@@ -356,10 +360,12 @@ Up-regulated: adj. p value < 0.05 **AND** logFC < -0.58
 Not Significant: adj. p value > 0.05 **AND/OR** abs(logFC) > 0.58
 
 ```{r DE_summary_all, echo=FALSE, results='asis'}
-for (i in seq_along(efit_list)) {
-  contrast=names(efit_list)[i]
-  print(display_de_summary(efit_list[[i]]))  # Explicit print
-}
+tagList(
+  lapply(seq_along(efit_list), function(i) {
+    contrast <- names(efit_list)[i]
+    display_de_summary(efit_list[[i]])  # Directly return the datatable
+  })
+)
 ```
 
 ## Interactive Downloadable Differential Expression Results Tables
@@ -368,10 +374,12 @@ for (i in seq_along(efit_list)) {
 - **Tables can be filtered, sorted, and downloaded**  
 
 ```{r}
-for (i in seq_along(efit_list)) {
-  contrast_name=gsub("^X| X", "",names(efit_list)[i])
-  print(display_de_result_table(efit_list[[i]], contrast_name = contrast_name))  # Explicit print
-}
+tagList(
+  lapply(seq_along(efit_list), function(i) {
+    contrast_name <- gsub("^X| X", "", names(efit_list)[i])
+    display_de_result_table(efit_list[[i]], contrast_name = contrast_name)  # Directly return the datatable
+  })
+)
 ```
 
 ## Differential Expression Results Visualizations
@@ -381,9 +389,6 @@ for (i in seq_along(efit_list)) {
 Visualization of **log-fold changes vs. statistical significance** for each contrast (plotly v4.1 (Sievert C 2020)) shows patterns of **significantly up/downregulated genes** ("significance" determined by adj. p value < 0.05 ***AND** abs(logFC) > 0.58).
 
 ```{r volcano_plots_all, echo=FALSE, results='asis', fig.width=9, fig.height=5}
-library(plotly)
-library(htmltools)
-
 # Generate all volcano plots and store in a list
 volcano_plots <- lapply(seq_along(efit_results_dfs), function(i) {
   generate_volcano_plot(efit_results_dfs[[i]], paste0(gsub("efit_|_results_df","",names(efit_results_dfs)[i]), "\n")) %>%
