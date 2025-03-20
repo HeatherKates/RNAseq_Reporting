@@ -49,7 +49,7 @@ parse_params <- function(filepath) {
 }
 
 # Load the parameters
-report_params <- parse_params("Report_params.txt")
+report_params <- parse_params(param_file)
 ```
 
 ```{r}
