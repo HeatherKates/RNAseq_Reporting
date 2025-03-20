@@ -421,98 +421,84 @@ tagList(heatmap_list)
 
 Pathway enrichment analysis was performed to identify functional enrichment of gene lists and to compare these significant results across contrasts.
 
+Note the name of the gene lists in the x-axis as plots to understand what the input gene lists were for enrichment analysis.
+
+```{r enrichment_analysis, eval=TRUE}
+# Run GO & KEGG enrichment for all specified gene lists
+all_results <- list()
+for (list_name in names(gene_lists)) {
+  
+  message("Processing: ", list_name)
+
+  # Initialize results storage
+  GO_results <- list()
+  
+  for (ont in c("BP", "MF", "CC")) {
+    result_name <- paste0(list_name, "_GO_", ont, "_results")
+    
+    GO_results[[result_name]] <- generate_enrichment_plot(
+      gene_lists = gene_lists[[list_name]],  
+      de_results_df = bind_rows(efit_results_dfs, .id = "contrast"), 
+      universe_entrez = universe_entrez,
+      ont_category = ont,
+      annotation_db = report_params$annotation_db
+    )
+    
+    saveRDS(GO_results[[result_name]], paste0(report_params$out_dir, "/", result_name, ".RDS"))
+  }
+  
+  # Perform KEGG enrichment
+  KEGG_result_name <- paste0(list_name, "_KEGG_results")
+  
+  KEGG_results <- generate_kegg_enrichment_plot(
+    gene_lists = gene_lists[[list_name]], 
+    de_results_df = bind_rows(efit_results_dfs, .id = "contrast"), 
+    universe_entrez = universe_entrez,
+    annotation_db = report_params$annotation_db
+  )
+  
+  saveRDS(KEGG_results, paste0(report_params$out_dir, "/", KEGG_result_name, ".RDS"))
+  
+  # Store results for rendering
+  all_results[[list_name]] <- list(GO = GO_results, KEGG = KEGG_results)
+}
+```
+
 ## Gene Ontology (GO) Enrichment Analysis
 
 Gene Ontology enrichment was performed using the enrichGO function in clusterProfiler v4.8 (Yu et al. 2012) in each of three GO categories (BP, MF, CC). **Interactive GO enrichment plots** are based on the top 10 significantly enriched GO terms per GO category per gene list. Hover over the plot to view p-value, gene ratio, and up to the top 20 DE genes (sorted by DE adj.p.value) in that term.
 
 To assess similiarities between gene lists' enrichment results, if a gene list(s) had significant results for a different gene lists' top-10 term, that result is displayed as well regardless of whether or not the result was in top 10. **Downloadable results excel file** include all significant results for all gene lists.
 
-### DE genes
-
-Gene lists are significantly DE genes per contrast
-
-```{r GO enrichment,eval=TRUE}
-# Generate dynamic gene lists
-gene_lists <- list()
-for (i in seq_along(entrez_ids_list)) {
-  # Extract contrast name and clean it for naming
-  contrast_name <- names(entrez_ids_list)[i] %>%
-    gsub("top_DE_entrezIDs_efit_", "", .) %>%
-    gsub("_results_df", "", .) 
-  
-  # Create named gene lists for up and downregulated genes
-  if (!is.null(entrez_ids_list[[i]]$up) && length(na.omit(entrez_ids_list[[i]]$up)) > 0) {
-    gene_lists[[paste0(contrast_name, ".up")]] <- na.omit(entrez_ids_list[[i]]$up)
-  }
-  if (!is.null(entrez_ids_list[[i]]$down) && length(na.omit(entrez_ids_list[[i]]$down)) > 0) {
-    gene_lists[[paste0(contrast_name, ".down")]] <- na.omit(entrez_ids_list[[i]]$down)
+```{r GO result}
+# Load and render GO results for each gene list & ontology
+for (list_name in names(all_results)) {
+  for (ont in c("BP", "MF", "CC")) {
+    result_name <- paste0(list_name, "_GO_", ont, "_results")
+    
+    # Load saved results if needed
+    if (!exists(result_name)) {
+      all_results[[list_name]]$GO[[result_name]] <- readRDS(paste0(report_params$out_dir, "/", result_name, ".RDS"))
+    }
+    
+    # Extract results
+    go_result <- all_results[[list_name]]$GO[[result_name]]
+    
+    # Plot interactive and static
+    download_button_png(go_result$static_plot, paste0(result_name, "_plot"), height=12)
+    print(go_result$interactive_plot)
+    
+    # Downloadable Excel file
+    go_result$go_results %>% downloadthis::download_this(
+      output_name = result_name,
+      output_extension = ".xlsx",
+      button_label = paste("Download", list_name, ont, "GO results"),
+      button_type = "primary",
+      has_icon = TRUE,
+      icon = "fa fa-save"
+    )
   }
 }
-
-# Perform GO Enrichment for BP, MF, CC
-GO_BP_results <- generate_enrichment_plot(
-  gene_lists = gene_lists, 
-  de_results_df = bind_rows(efit_results_dfs, .id = "contrast"), 
-  universe_entrez = universe_entrez,
-  ont_category = "BP",
-  annotation_db = report_params$annotation_db
-)
-
-GO_MF_results <- generate_enrichment_plot(
-  gene_lists = gene_lists, 
-  de_results_df = bind_rows(efit_results_dfs, .id = "contrast"), 
-  universe_entrez = universe_entrez,
-  ont_category = "MF",
-  annotation_db = report_params$annotation_db
-)
-
-GO_CC_results <- generate_enrichment_plot(
-  gene_lists = gene_lists, 
-  de_results_df = bind_rows(efit_results_dfs, .id = "contrast"), 
-  universe_entrez = universe_entrez,
-  ont_category = "CC",
-  annotation_db = report_params$annotation_db
-)
-
-# Save results
-saveRDS(GO_BP_results, paste0(report_params$out_dir,"/GOBPResults.RDS"))
-saveRDS(GO_MF_results, paste0(report_params$out_dir,"/GOMFResults.RDS"))
-saveRDS(GO_CC_results, paste0(report_params$out_dir,"/GOCCResults.RDS"))
-```
-
-```{r GO enrich plots,fig.width=12, fig.height=10}
-# Check if any of the required objects are missing
-if (!exists("GO_BP_results") || !exists("GO_MP_results") || !exists("GO_CC_results")) {
-  GO_BP_results <- readRDS(paste0(report_params$out_dir,"/GOBPResults.RDS"))
-  GO_MF_results <- readRDS(paste0(report_params$out_dir,"/GOMFResults.RDS"))
-  GO_CC_results <- readRDS(paste0(report_params$out_dir,"/GOCCResults.RDS"))
-}
-# Display interactive plots
-download_button_png(GO_BP_results$static_plot, "GO_BP_enrich_plot",height = 12)
-GO_BP_results$interactive_plot
-
-download_button_png(GO_MF_results$static_plot, "GO_MF_enrich_plot",height=12)
-GO_MF_results$interactive_plot
-
-download_button_png(GO_CC_results$static_plot, "GO_CC_enrich_plot",height=12)
-GO_CC_results$interactive_plot
-
-# Combine GO results into a single list of data frames
-GO_results_list <- list(
-  "BP_Results" = GO_BP_results$go_results,
-  "MF_Results" = GO_MF_results$go_results,
-  "CC_Results" = GO_CC_results$go_results
-)
-
-# Download GO results as an Excel file
-GO_results_list %>% downloadthis::download_this(
-  output_name = "GO_results",
-  output_extension = ".xlsx",
-  button_label = "Download GO enrichment results for all GO categories and all contrasts",
-button_type = "primary",
-  has_icon = TRUE,
-  icon = "fa fa-save"
-)
 ```
 
 ## KEGG Pathway Enrichment Analysis
@@ -521,38 +507,33 @@ KEGG enrichment was performed using the enrichKEGG function in clusterProfiler v
 
 To assess similiarities between gene lists' enrichment results, if a gene list(s) had significant results for a different gene lists' top-10 pathway, that result is displayed as well regardless of whether or not the result was in top 10. **Downloadable results excel file** include all significant results for all gene lists.
 
-```{r KEGG,eval=TRUE}
-# Run the function
-kegg_results <- generate_kegg_enrichment_plot(
-  gene_lists = gene_lists, 
-  de_results_df = bind_rows(efit_results_dfs, .id = "contrast"), 
-  universe_entrez = universe_entrez,
-  annotation_db = report_params$annotation_db 
-)
-saveRDS(kegg_results,paste0(report_params$out_dir,"KEGGResults.RDS"))
-```
-
-### DE genes
-
-Gene lists are significantly DE genes per contrast
-
-```{r kegg plot,fig.width=12, fig.height=10}
-if (!exists("kegg_results")) {
-  kegg_results <- readRDS(paste0(report_params$out_dir,"KEGGResults.RDS"))
+```{r}
+# Load and render KEGG results for each gene list
+for (list_name in names(all_results)) {
+  KEGG_result_name <- paste0(list_name, "_KEGG_results")
+  
+  # Load saved KEGG results if needed
+  if (!exists(KEGG_result_name)) {
+    all_results[[list_name]]$KEGG <- readRDS(paste0(report_params$out_dir, "/", KEGG_result_name, ".RDS"))
+  }
+  
+  # Extract results
+  kegg_result <- all_results[[list_name]]$KEGG
+  
+  # Plot interactive and static
+  download_button_png(kegg_result$static_plot, paste0(KEGG_result_name, "_plot"), height=12)
+  print(kegg_result$interactive_plot)
+  
+  # Downloadable Excel file
+  kegg_result$kegg_results %>% downloadthis::download_this(
+    output_name = KEGG_result_name,
+    output_extension = ".xlsx",
+    button_label = paste("Download", list_name, "KEGG results"),
+    button_type = "primary",
+    has_icon = TRUE,
+    icon = "fa fa-save"
+  )
 }
-
-download_button_png(kegg_results$static_plot, "kegg_enrichment_plot",height=12)
-kegg_results$interactive_plot
-
-
-kegg_results$kegg_results %>%  downloadthis::download_this(
-  output_name = "KEGG_results",
-  output_extension = ".xlsx",
-  button_label = "Download KEGG enrichment results for all contrasts",
-button_type = "primary",
-  has_icon = TRUE,
-  icon = "fa fa-save"
-)
 ```
 
 # References
