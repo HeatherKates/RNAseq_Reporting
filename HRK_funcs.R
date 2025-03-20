@@ -691,7 +691,7 @@ library(plotly)
 library(RColorBrewer)
 library(car)
 
-plot_pca <- function(dge, title, grp_var, show_legend = TRUE, combine_plots = FALSE) {
+plot_pca <- function(dge, title, grp_var=report_params$group_var, show_legend = TRUE, combine_plots = FALSE) {
   # Extract log-transformed CPM values
   PCA_DATA <- t(cpm(dge, log = TRUE))  # Transpose to have samples as rows
   numsonly <- as.data.frame(PCA_DATA)
