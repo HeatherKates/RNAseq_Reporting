@@ -1,0 +1,566 @@
+---
+title: "BCB-SR RNA-seq Report"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: cosmo
+    highlight: tango
+    code_folding: none
+pandoc_args: 
+  - "+RTS" 
+  - "-K16000m"
+  - "-RTS"
+date: "`r format(Sys.time(), '%m/%d/%y')`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE, fig.align="center")
+library(ggplot2)
+library(gridExtra)
+library(DT)
+library(limma)
+library(edgeR)
+library(qs)
+library(kableExtra)
+source("HRK_funcs.R")
+library(downloadthis, lib.loc = "~/R/x86_64-pc-linux-gnu-library/4.2/")
+select <- dplyr::select
+```
+
+```{r params}
+# Read the report parameters from the text file
+parse_params <- function(filepath) {
+  lines <- readLines(filepath)
+  param_list <- list()
+  
+  for (line in lines) {
+    if (grepl("^--", line)) {
+      parts <- strsplit(line, " ", fixed = TRUE)[[1]]
+      key <- gsub("--", "", parts[1])  # Remove the "--"
+      value <- paste(parts[-1], collapse = " ")  # Join the rest as value
+      value <- gsub('^"|"$', '', value)  # Remove any surrounding quotes
+      param_list[[key]] <- value
+    }
+  }
+  
+  return(param_list)
+}
+
+# Load the parameters
+report_params <- parse_params("Report_params.txt")
+```
+
+```{r}
+suppressMessages(suppressWarnings(capture.output(source("analysis.R"), file = NULL)))
+```
+
+# Project Summary
+
+**PI**: `r report_params$PI`
+
+**Institution**: `r report_params$Institution`
+
+**Department**: `r report_params$Department`
+
+**Study Contact**: `r report_params$Study_Contact`
+
+**Project Title**: `r report_params$Project_Title`
+
+**Study Summary**: `r report_params$Study_Summary`
+
+**Sample type(s)**: `r report_params$Sample_Types`
+
+**Organism**: `r report_params$Organism`
+
+**Analysis goal(s)**: `r report_params$Analysis_Goals`
+
+**Report-prepared-by**:  
+  - `r report_params$Report_Prepared_By`
+  
+**Report-reviewed-by**:  
+  - `r report_params$Report_Reviewed_By`
+
+# Data Downloads
+
+## Download Raw Sequencing Data  
+
+Below is a link to download the raw sequencing files. These files are very large (>150GB); download only when needed. Note that you **must be logged into your UF dropbox account** for this link to work.
+
+```{r download raw data,echo=FALSE, results="asis"}
+url <- report_params$raw_seq_URL
+cat(sprintf('<a href="%s" class="btn btn-primary" role="button" download>Download Raw Sequence Files</a>', url))
+```
+
+## Download Sequencing Data Quality Control Summary
+
+FastQC provides quality metrics for individual sequencing samples, including read quality, GC content, and adapter contamination. The MultiQC report summarizes these results across all samples. The multiQC report is of raw sequence data. These data were quality filtered and trimmed prior to analysis. For guidance on interpreting the results, see [FastQC documentation](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/).
+
+```{r,results="asis"}
+library(base64enc)
+
+# Read the file as binary and encode as base64
+output_file <- report_params$multiqc_html
+base64_content <- base64encode(output_file)
+
+# Create a downloadable link with embedded file
+cat(sprintf(
+  '<a download="novogene_brain_multiqc_report.html" href="data:text/html;base64,%s" class="btn btn-primary">Download MultiQC Report</a>',
+  base64_content
+))
+```
+
+## Download Raw and Filtered Counts Data
+
+Description of Data Sheets:
+
+1. **Raw**: Raw gene count matrix before filtering or normalization.
+2. **CPM**: Counts per million (CPM) normalized expression values, with gene symbols.
+3. **LCPM**: Log-transformed CPM values, useful for visualization, with gene symbols.
+4. **Filtered**: Gene expression counts filtered to remove lowly-expressed and non-variable genes using the `NOISeq` method. **This dataset was used as input for DE analysis**
+5. **Sample_Metadata**: Sample information including treatment, group, and library sizes.
+
+The Excel file containing these datasets can be downloaded using the link provided below.
+
+```{r download count data}
+# Load necessary libraries
+library(openxlsx)
+library(dplyr)
+
+# Extract count matrices from DGELists and add gene symbols
+extract_dge_data <- function(dge) {
+  df <- as.data.frame(dge$counts)
+  df$ENSEMBL <- rownames(dge$counts)
+  df <- left_join(df, dge$genes, by = "ENSEMBL")  # Add gene symbols
+  df <- df %>% select(SYMBOL, everything())  # Move gene names to first column
+  return(df)
+}
+
+dge_filtered_df <- extract_dge_data(dge_list_edgeR)
+dge_raw_df <- extract_dge_data(dge_list_raw)
+dge_NOISeq_df <- extract_dge_data(dge_list_NOISeq)
+
+# Convert matrices to dataframes and add gene symbols
+convert_matrix <- function(matrix, genes_df) {
+  df <- as.data.frame(matrix)
+  df$ENSEMBL <- rownames(matrix)
+  df <- left_join(df, genes_df, by = "ENSEMBL")  # Add gene symbols
+  df <- df %>% select(SYMBOL, everything())  # Move gene names to first column
+  return(df)
+}
+cpm_matrix <- cpm(dge_list_NOISeq)
+cpm_df <- convert_matrix(cpm_matrix, dge_list_edgeR$genes)
+lcpm_matrix <- cpm(dge_list_NOISeq,log = TRUE)
+lcpm_df <- convert_matrix(lcpm_matrix, dge_list_edgeR$genes)
+
+# Extract sample metadata from DGEList
+sample_metadata <- dge_list_NOISeq$samples
+
+# Create a list of dataframes to be written to an Excel file
+df_list <- list(
+  "Raw" = dge_raw_df,
+    "Filtered" = dge_NOISeq_df,
+  "CPM" = cpm_df,
+  "LCPM" = lcpm_df,
+  "Sample_Metadata" = sample_metadata
+)
+
+# Generate a download button
+df_list %>% downloadthis::download_this(
+  output_name = "RNAseq_Data_Analysis",
+  output_extension = ".xlsx",
+  button_label = "Download RNA-seq Data File",
+  button_type = "primary",
+  has_icon = TRUE,
+  icon = "fa fa-save"
+)
+```
+
+# Data Visualizations
+
+## PCA (multivariate analaysis)</span>
+
+Principal component analysis of gene expression data were calculated in R v4.3.3. Two-dimensional PCA score plots reveal possible separation in gene expression profiles and can help to identify quality control issues and batch effects. Ellipses are calculated using the R package car (Fox J. and Weisberg S. 2019) and ~1 Std dev.
+
+### PCA of all samples
+
+```{r pca all, fig.width=12, fig.height=4}
+# Define DGELists and Titles
+dge_list <- list(dge_list_raw, dge_list_NOISeq, dge_list_edgeR)
+
+combined_pca_plot <- plot_pca(dge_list_raw, title = "Combined PCA", grp_var = "Condition", combine_plots = TRUE)
+combined_pca_plot
+
+
+# Generate PCA plots: Show legend only for the first plot
+pca_plots <- mapply(plot_pca, dge_list, show_legend = c(TRUE, FALSE, FALSE), title="", SIMPLIFY = FALSE)
+
+
+# Combine the three plots in a single row
+combined_plot <- subplot(pca_plots[[1]], pca_plots[[2]], pca_plots[[3]], 
+                         nrows = 1, shareY = FALSE)
+```
+
+### PCA per-contrast
+
+```{r pca}
+# Apply PCA separately for each contrast
+pca_results <- lapply(names(efit_results_dfs), function(contrast_name) {
+  plot_pca_by_contrast(dge_list = list(dge_list_raw, dge_list_NOISeq, dge_list_edgeR), 
+                        contrast_name = gsub("_results_df","",contrast_name), 
+                        group_var = report_params$group_var)
+})
+
+# Display PCA plots
+tagList(pca_results)
+```
+
+## Global comparison of transcriptional profile similarity between groups
+
+### Spearman correlation
+
+Pairwise sample-to-sample correlation coefficients of log CPM normalized filtered counts were calculated using Spearman’s rank correlation in R v4.3.3 and visualized using pheatmap 1.0 (Kolde 2019).
+
+```{r cor,fig.width=12, fig.height=6}
+library(pheatmap)
+library(tibble)
+library(RColorBrewer)
+
+# Step 1: Filter samples based on a dynamic grouping variable
+if (!is.null(report_params$filter_samples) || report_params$filter_samples != ""){
+  selected_samples <- sample.keys %>%
+    filter(!SampleName %in% report_params$filter_samples) %>%
+    pull(SampleName)
+} else {
+  selected_samples <- sample.keys %>% pull(SampleName)
+}
+
+# Step 2: Subset the lcpm matrix for the selected samples
+lcpm_filtered <- lcpm_matrix[, colnames(lcpm_matrix) %in% selected_samples]
+
+# Step 3: Calculate Spearman's correlation matrix
+cor_matrix <- cor(lcpm_filtered, method = "spearman")
+
+# Step 4: Annotate samples dynamically using `report_params$group_var`
+annotation_col <- sample.keys %>%
+  filter(SampleName %in% colnames(cor_matrix)) %>%
+  select(SampleName, all_of(report_params$group_var)) %>%
+  column_to_rownames("SampleName")
+
+# Step 5: Define dynamic colors for the annotation
+group_levels <- unique(annotation_col[[report_params$group_var]])  # Extract unique groups
+color_palette <- brewer.pal(min(length(group_levels), 8), "Set2")  # Choose up to 8 distinct colors
+ann_colors <- setNames(color_palette[seq_along(group_levels)], group_levels)  # Assign colors to levels
+
+# Define color scale for heatmap
+red_palette <- colorRampPalette(c("blue", "white", "red"))(100)
+
+# Capture min and max dynamically
+min_val <- min(cor_matrix)
+max_val <- max(cor_matrix)
+
+# Option 1: Quadratic scaling for better mid-range contrast
+breaks_seq <- seq(min_val^2, max_val^2, length.out = 101)^(1/2)  # Undo quadratic transformation
+
+# Generate the heatmap
+pheatmap(
+  cor_matrix,
+  color = red_palette,
+  breaks = breaks_seq,  # Fixes the issue with incorrect within-group coloring
+  annotation_col = annotation_col,
+  annotation_row = annotation_col,  
+  annotation_colors = setNames(list(ann_colors), report_params$group_var),
+  clustering_method = "complete",
+  main = paste("Spearman's Correlation Plot for Normalized Read Counts (lcpm) filtered by", report_params$group_var),
+  display_numbers = TRUE,
+  number_format = "%.3f",
+  fontsize = 10,
+  fontsize_number = 10,
+  number_color = "black"
+)
+```
+
+### Heatmap of top 1000 CV genes
+
+Scaled gene expression values of the top 1000 variable genes (sd/mean) were visualized using pheatmap 1.0 (Kolde 2019) with sample and gene clustered by complete hierarchical clustering.
+
+```{r,fig.width=12,fig.height=6}
+# Step 3: Identify the top 1000 most variable genes by CV
+cv_values <- apply(lcpm_filtered, 1, function(x) sd(x) / mean(x))  # Compute CV
+top_1000_genes <- names(sort(cv_values, decreasing = TRUE))[1:1000]  # Select top 1000
+lcpm_top1000 <- lcpm_filtered[top_1000_genes, ]  # Subset the matrix
+
+# Generate heatmap with gene clustering but NO row dendrogram
+pheatmap(
+  lcpm_top1000,
+  color = colorRampPalette(c("blue", "white", "red"))(100),
+  annotation_col = annotation_col,  
+  annotation_colors = setNames(list(ann_colors), report_params$group_var),
+  clustering_method = "complete",  
+  scale = "row",
+  show_rownames = FALSE,  
+  show_colnames = TRUE,
+  main = "Top 1000 Most Variable Genes' (CV) Expression (Z-score) by Sample",
+  fontsize = 10,
+  legend_labels = c("title\n")
+)
+
+```
+
+## Mean-Variance Relationship: Before and After Variance Moderation
+
+These **mean-variance trend** plots are provided to illustrate how the DE analysis ensure differential expression (DE) results are **not biased by expression-dependent variance**. The top plot shows how **variance changes with expression level** in the raw data. Typically, variance **decreases** as expression increases. This confirms that `voom()` correctly models **heteroscedasticity (unequal variance)** in RNA-seq data. The **Bottom plot** shows variance **after empirical Bayes shrinkage** using `eBayes()`. The trend should be **flat**, indicating variance is properly stabilized. 
+
+```{r SA plot side by side, fig.width=8, fig.height=4, out.width="100%"}
+library(gridExtra)
+library(grid)
+library(png)
+
+# Load the PNG plot as a raster image
+img <- rasterGrob(readPNG(paste0(report_params$out_dir, "/voom_plot.png")), interpolate = TRUE)
+
+# Open a graphics device, plot `plotSA()`, then capture it
+tmp <- tempfile(fileext = ".png")
+invisible(png(tmp, width = 600, height = 600, res = 150))  # Open a temporary PNG device
+par(mar=c(3, 5, 2, 2), cex.axis=0.7, cex.lab=0.7, cex.main=0.7)  
+plotSA(efit_list[[1]], main = "Final model: Mean-Variance trend")
+invisible(dev.off())  # Close the device
+
+# Load the saved plot as a raster image
+plot_sa_grob <- rasterGrob(readPNG(tmp), interpolate = TRUE)
+
+# Arrange both images side by side
+grid.arrange(img, plot_sa_grob, ncol = 2)
+```
+
+# Differential Expression Analysis
+
+Differential expression analysis was performed using limma v3.5 (Ritchie et al. 2015). Raw RNA-seq counts were filtered using NOISeq v2.4 (Tarazona et al., 2011) to remove features that have an average expression per condition less than 1 cpm a coefficient of variation > 100% in all the conditions. To account for differences in sequencing depth and composition bias, TMM normalization as implemented in edgeR v3.4 (Robinson et al. 2010) was used to calculate normalization factors that were used during voom transformation. A linear model was fitted to the transformed data, and pairwise comparisons between conditions were assessed by computing moderated t-statistics, moderated F-statistic, and log-odds of differential expression with empirical Bayes moderation of the standard errors. Statistical significance was assessed using adjusted p-values to control the false discovery rate (FDR).
+
+```{r}
+# Print the number of contrasts tested
+cat(paste0(length(names(efit_list)), " contrasts were tested:"))
+
+# Create a table of contrasts
+contrast_table <- data.frame("Contrast" = names(efit_list))
+kable(contrast_table, format = "html", caption = "Table: Tested Contrasts")
+```
+
+## Summary of DE results per contrast
+
+Down-regulated: adj. p value < 0.05 **AND** logFC > 0.58
+
+Up-regulated: adj. p value < 0.05 **AND** logFC < -0.58
+
+Not Significant: adj. p value > 0.05 **AND/OR** abs(logFC) > 0.58
+
+```{r DE_summary_all, echo=FALSE, results='asis'}
+for (i in seq_along(efit_list)) {
+  contrast=names(efit_list)[i]
+  print(display_de_summary(efit_list[[i]]))  # Explicit print
+}
+```
+
+## Interactive Downloadable Differential Expression Results Tables
+
+- Summary per contrast showing the number of differentially expressed genes and key statistics.
+- **Tables can be filtered, sorted, and downloaded**  
+
+```{r}
+for (i in seq_along(efit_list)) {
+  contrast_name=gsub("^X| X", "",names(efit_list)[i])
+  print(display_de_result_table(efit_list[[i]], contrast_name = contrast_name))  # Explicit print
+}
+```
+
+## Differential Expression Results Visualizations
+
+### Volcano Plots
+
+Visualization of **log-fold changes vs. statistical significance** for each contrast (plotly v4.1 (Sievert C 2020)) shows patterns of **significantly up/downregulated genes** ("significance" determined by adj. p value < 0.05 ***AND** abs(logFC) > 0.58).
+
+```{r volcano_plots_all, echo=FALSE, results='asis', fig.width=9, fig.height=5}
+library(plotly)
+library(htmltools)
+
+# Generate all volcano plots and store in a list
+volcano_plots <- lapply(seq_along(efit_results_dfs), function(i) {
+  generate_volcano_plot(efit_results_dfs[[i]], paste0(gsub("efit_|_results_df","",names(efit_results_dfs)[i]), "\n")) %>%
+    style(marker = list(size = 2))
+})
+
+# Render all plots
+tagList(volcano_plots)
+```
+
+### Heatmaps
+
+Heatmaps of the **top 50 DE genes** for each contrast show the scaled counts values for all samples in that contrast using heatmaply v1.5 (Galili et al. 2017). Hierarchical clustering of samples is based on expression patterns.
+
+```{r heatmaps of top DE genes,fig.width=9, fig.height=5}
+heatmap_list <- lapply(seq_along(efit_results_dfs), function(i) {
+  generate_heatmap(
+    efit_results_df = efit_results_dfs[[i]],  
+    lcpm_matrix = lcpm_matrix,  
+    dge_list_NOISeq = dge_list_NOISeq,  
+    title = paste("Gene Expression (logCPM) of Top 50 DE Genes\n", names(efit_results_dfs)[i]),  
+    num_genes = 50,  
+    fontsize_row = 9  
+  )
+})
+tagList(heatmap_list)
+```
+
+# Pathway Enrichment Analysis
+
+Pathway enrichment analysis was performed to identify functional enrichment of gene lists and to compare these significant results across contrasts.
+
+## Gene Ontology (GO) Enrichment Analysis
+
+Gene Ontology enrichment was performed using the enrichGO function in clusterProfiler v4.8 (Yu et al. 2012) in each of three GO categories (BP, MF, CC). **Interactive GO enrichment plots** are based on the top 10 significantly enriched GO terms per GO category per gene list. Hover over the plot to view p-value, gene ratio, and up to the top 20 DE genes (sorted by DE adj.p.value) in that term.
+
+To assess similiarities between gene lists' enrichment results, if a gene list(s) had significant results for a different gene lists' top-10 term, that result is displayed as well regardless of whether or not the result was in top 10. **Downloadable results excel file** include all significant results for all gene lists.
+
+### DE genes
+
+Gene lists are significantly DE genes per contrast
+
+```{r GO enrichment,eval=TRUE}
+# Generate dynamic gene lists
+gene_lists <- list()
+for (i in seq_along(entrez_ids_list)) {
+  # Extract contrast name and clean it for naming
+  contrast_name <- names(entrez_ids_list)[i] %>%
+    gsub("top_DE_entrezIDs_efit_", "", .) %>%
+    gsub("_results_df", "", .) 
+  
+  # Create named gene lists for up and downregulated genes
+  if (!is.null(entrez_ids_list[[i]]$up) && length(na.omit(entrez_ids_list[[i]]$up)) > 0) {
+    gene_lists[[paste0(contrast_name, ".up")]] <- na.omit(entrez_ids_list[[i]]$up)
+  }
+  if (!is.null(entrez_ids_list[[i]]$down) && length(na.omit(entrez_ids_list[[i]]$down)) > 0) {
+    gene_lists[[paste0(contrast_name, ".down")]] <- na.omit(entrez_ids_list[[i]]$down)
+  }
+}
+
+# Perform GO Enrichment for BP, MF, CC
+GO_BP_results <- generate_enrichment_plot(
+  gene_lists = gene_lists, 
+  de_results_df = bind_rows(efit_results_dfs, .id = "contrast"), 
+  universe_entrez = universe_entrez,
+  ont_category = "BP",
+  annotation_db = report_params$annotation_db
+)
+
+GO_MF_results <- generate_enrichment_plot(
+  gene_lists = gene_lists, 
+  de_results_df = bind_rows(efit_results_dfs, .id = "contrast"), 
+  universe_entrez = universe_entrez,
+  ont_category = "MF",
+  annotation_db = report_params$annotation_db
+)
+
+GO_CC_results <- generate_enrichment_plot(
+  gene_lists = gene_lists, 
+  de_results_df = bind_rows(efit_results_dfs, .id = "contrast"), 
+  universe_entrez = universe_entrez,
+  ont_category = "CC",
+  annotation_db = report_params$annotation_db
+)
+
+# Save results
+saveRDS(GO_BP_results, paste0(report_params$out_dir,"/GOBPResults.RDS"))
+saveRDS(GO_MF_results, paste0(report_params$out_dir,"/GOMFResults.RDS"))
+saveRDS(GO_CC_results, paste0(report_params$out_dir,"/GOCCResults.RDS"))
+```
+
+```{r GO enrich plots,fig.width=12, fig.height=10}
+# Check if any of the required objects are missing
+if (!exists("GO_BP_results") || !exists("GO_MP_results") || !exists("GO_CC_results")) {
+  GO_BP_results <- readRDS(paste0(report_params$out_dir,"/GOBPResults.RDS"))
+  GO_MF_results <- readRDS(paste0(report_params$out_dir,"/GOMFResults.RDS"))
+  GO_CC_results <- readRDS(paste0(report_params$out_dir,"/GOCCResults.RDS"))
+}
+# Display interactive plots
+download_button_png(GO_BP_results$static_plot, "GO_BP_enrich_plot",height = 12)
+GO_BP_results$interactive_plot
+
+download_button_png(GO_MF_results$static_plot, "GO_MF_enrich_plot",height=12)
+GO_MF_results$interactive_plot
+
+download_button_png(GO_CC_results$static_plot, "GO_CC_enrich_plot",height=12)
+GO_CC_results$interactive_plot
+
+# Combine GO results into a single list of data frames
+GO_results_list <- list(
+  "BP_Results" = GO_BP_results$go_results,
+  "MF_Results" = GO_MF_results$go_results,
+  "CC_Results" = GO_CC_results$go_results
+)
+
+# Download GO results as an Excel file
+GO_results_list %>% downloadthis::download_this(
+  output_name = "GO_results",
+  output_extension = ".xlsx",
+  button_label = "Download GO enrichment results for all GO categories and all contrasts",
+button_type = "primary",
+  has_icon = TRUE,
+  icon = "fa fa-save"
+)
+```
+
+## KEGG Pathway Enrichment Analysis
+
+KEGG enrichment was performed using the enrichKEGG function in clusterProfiler v4.8 (Yu et al. 2012). **Interactive KEGG enrichment plots** are based on the top 10 significantly enriched KEGG pathways per gene list. Hover over the plot to view p-value, gene ratio, and up to the top 20 DE genes (sorted by DE adj.p.value) in that pathway.
+
+To assess similiarities between gene lists' enrichment results, if a gene list(s) had significant results for a different gene lists' top-10 pathway, that result is displayed as well regardless of whether or not the result was in top 10. **Downloadable results excel file** include all significant results for all gene lists.
+
+```{r KEGG,eval=TRUE}
+# Run the function
+kegg_results <- generate_kegg_enrichment_plot(
+  gene_lists = gene_lists, 
+  de_results_df = bind_rows(efit_results_dfs, .id = "contrast"), 
+  universe_entrez = universe_entrez,
+  annotation_db = report_params$annotation_db 
+)
+saveRDS(kegg_results,paste0(report_params$out_dir,"KEGGResults.RDS"))
+```
+
+### DE genes
+
+Gene lists are significantly DE genes per contrast
+
+```{r kegg plot,fig.width=12, fig.height=10}
+if (!exists("kegg_results")) {
+  kegg_results <- readRDS(paste0(report_params$out_dir,"KEGGResults.RDS"))
+}
+
+download_button_png(kegg_results$static_plot, "kegg_enrichment_plot",height=12)
+kegg_results$interactive_plot
+
+
+kegg_results$kegg_results %>%  downloadthis::download_this(
+  output_name = "KEGG_results",
+  output_extension = ".xlsx",
+  button_label = "Download KEGG enrichment results for all contrasts",
+button_type = "primary",
+  has_icon = TRUE,
+  icon = "fa fa-save"
+)
+```
+
+# References
+
+- Robinson MD, McCarthy DJ and Smyth GK (2010). edgeR: a Bioconductor package for differential expression analysis of digital gene expression data. Bioinformatics
+  26, 139-140
+- Tarazona S, García-Alcalde F, Dopazo J, Ferrer A, Conesa A (2011). *Differential expression in RNA-seq: a matter of depth*. Genome Research, 21(12), 2213-2223.  
+- Ritchie ME, Phipson B, Wu D, Hu Y, Law CW, Shi W, Smyth GK (2015). “limma powers differential expression analyses for RNA-sequencing and microarray studies.” Nucleic Acids Research, 43(7), e47. doi:10.1093/nar/gkv007.
+- Yu G, Wang L, Han Y, He Q (2012). “clusterProfiler: an R package for comparing biological themes among gene clusters.” OMICS: A Journal of Integrative Biology, 16(5), 284-287. doi:10.1089/omi.2011.0118.
+- R Core Team (2021). R: A language and environment for statistical computing. R Foundation for Statistical Computing, Vienna, Austria.
+- Kolde R (2019). pheatmap: Pretty Heatmaps. R package version 1.0.12, <https://CRAN.R-project.org/package=pheatmap>.
+- Galili, Tal, O'Callaghan, Alan, Sidi, Jonathan, Sievert, Carson (2017). “heatmaply: an R package for creating interactive cluster heatmaps for online publishing.” Bioinformatics. 
+- Sievert C (2020). Interactive Web-Based Data Visualization with R, plotly, and shiny. Chapman and Hall/CRC. ISBN 9781138331457, https://plotly-r.com.
+
+
+
