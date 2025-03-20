@@ -151,23 +151,35 @@ efit_results_list <- setNames(
   }),
   paste0("efit_", names(efit_list), "_results_df") # Informative names
 )
+# Create a flat list of DE gene lists with contrast-specific names
+top_DE_entrezIDs_list <- do.call(c, lapply(c("up", "down"), function(direction) {  
+  unlist(lapply(names(efit_results_list), function(contrast_name) {
+    df <- efit_results_list[[contrast_name]]
+    contrast_name_clean <- gsub("^efit_|_results_df$", "", contrast_name)
+    
+    # Extract genes based on the current direction
+    gene_list <- top_DE_entrezIDs(df, direction)
+    list(gene_list)  # Store in a list
+  }), recursive = FALSE)
+}))
 
-# Apply function dynamically for each contrast and store results
-top_DE_entrezIDs_list <- setNames(
-  lapply(efit_results_list, function(df) {
-    list(
-      up = top_DE_entrezIDs(df, "up"),
-      down = top_DE_entrezIDs(df, "down")
-    )
-  }),
-  paste0("top_DE_entrezIDs_", names(efit_results_list))
-)
+# Assign names in the correct order
+names(top_DE_entrezIDs_list) <- unlist(lapply(c("up", "down"), function(direction) {  
+  lapply(names(efit_results_list), function(contrast_name) {
+    contrast_name_clean <- gsub("^efit_|_results_df$", "", contrast_name)
+    paste0(contrast_name_clean, ".DE.", direction)  # Create meaningful names
+  })
+}))
 
+
+# Create a flat list of non-DE gene lists
 non_DE_entrezIDs_list <- setNames(
-  lapply(efit_results_list, function(df) {
-    non_DE_entrezIDs(df)
+  lapply(names(efit_results_list), function(contrast_name) {
+    df <- efit_results_list[[contrast_name]]
+    non_DE_entrezIDs(df)  # Should return a character vector
   }),
-  paste0("non_DE_entrezIDs_", names(efit_results_list))
+  gsub("^efit_|_results_df$", "", names(efit_results_list)) %>%
+    paste0(".nonDE")
 )
 
 universe_entrez <- mapIds(
