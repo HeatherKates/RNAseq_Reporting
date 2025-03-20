@@ -483,7 +483,8 @@ generate_heatmap <- function(efit_results_df, lcpm_matrix, dge_list_NOISeq, titl
     col_side_palette = col_side_palette,  # Corrected palette function
     labRow = rownames(lcpm_filtered),
     side_color_colorbar_len = 0.2,   
-    side_color_width = 0.05       
+    side_color_width = 0.05,
+    height=700
   )
   
   return(hm)
