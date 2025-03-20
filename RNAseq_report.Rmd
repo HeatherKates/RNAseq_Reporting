@@ -8,6 +8,8 @@ output:
     theme: cosmo
     highlight: tango
     code_folding: none
+params:
+    args: ''
 pandoc_args: 
   - "+RTS" 
   - "-K16000m"
@@ -49,7 +51,8 @@ parse_params <- function(filepath) {
 }
 
 # Load the parameters
-report_params <- parse_params(param_file)
+args <-  params$args
+report_params <- parse_params(args[1])
 ```
 
 ```{r}
