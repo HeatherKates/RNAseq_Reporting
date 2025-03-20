@@ -400,15 +400,15 @@ tagList(volcano_plots)
 
 Heatmaps of the **top 50 DE genes** for each contrast show the scaled counts values for all samples in that contrast using heatmaply v1.5 (Galili et al. 2017). Hierarchical clustering of samples is based on expression patterns.
 
-```{r heatmaps of top DE genes,fig.width=9, fig.height=5}
+```{r heatmaps of top DE genes,fig.width=9, fig.height=9}
 heatmap_list <- lapply(seq_along(efit_results_dfs), function(i) {
   generate_heatmap(
     efit_results_df = efit_results_dfs[[i]],  
     lcpm_matrix = lcpm_matrix,  
     dge_list_NOISeq = dge_list_NOISeq,  
-    title = paste("Gene Expression (logCPM) of Top 50 DE Genes\n", names(efit_results_dfs)[i]),  
+    title = paste("Gene Expression (logCPM) of Top 50 DE Genes\n", gsub("efit_|_results_df","",names(efit_results_dfs)[i])),  
     num_genes = 50,  
-    fontsize_row = 9  
+    fontsize_row = 9
   )
 })
 tagList(heatmap_list)
