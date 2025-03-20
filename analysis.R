@@ -152,32 +152,6 @@ efit_results_list <- setNames(
   paste0("efit_", names(efit_list), "_results_df") # Informative names
 )
 
-# Function to extract top DE genes and convert to Entrez IDs
-top_DE_entrezIDs <- function(df, direction = "up") {
-  if (direction == "up") {
-    filtered_genes <- df %>% filter(logFC > 0.58 & adj.P.value < 0.05)
-  } else if (direction == "down") {
-    filtered_genes <- df %>% filter(logFC < -0.58 & adj.P.value < 0.05)
-  } else {
-    stop("Invalid direction. Choose either 'up' or 'down'.")
-  }
-  
-  # Return empty vector if no significant genes
-  if (nrow(filtered_genes) == 0) {
-    return(character(0))  # Empty list instead of failure
-  }
-  
-  entrez_ids <- mapIds(
-    annotation_obj,
-    keys = filtered_genes$ensembleID,
-    column = "ENTREZID",
-    keytype = "ENSEMBL",
-    multiVals = "first"
-  )
-  
-  return(entrez_ids)
-}
-
 # Apply function dynamically for each contrast and store results
 top_DE_entrezIDs_list <- setNames(
   lapply(efit_results_list, function(df) {
@@ -187,6 +161,13 @@ top_DE_entrezIDs_list <- setNames(
     )
   }),
   paste0("top_DE_entrezIDs_", names(efit_results_list))
+)
+
+non_DE_entrezIDs_list <- setNames(
+  lapply(efit_results_list, function(df) {
+    non_DE_entrezIDs(df)
+  }),
+  paste0("non_DE_entrezIDs_", names(efit_results_list))
 )
 
 universe_entrez <- mapIds(
