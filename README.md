@@ -21,7 +21,9 @@ Ensure that **R** is loaded on your system. Then, run the following command to e
 
 \`\`\`sh
 module load R
-Rscript -e 'rmarkdown::render("RNAseq_report.Rmd", output_file = "CX.novogene_brain.Report.html")'
+Rscript -e 'rmarkdown::render("RNAseq_report.Rmd", 
+                              output_file = "CX.novogene_brain.Report.html", 
+                              params = list(param_file="My_Report_Params.txt"))'
 \`\`\`
 
 This will generate an HTML report summarizing the RNA-seq analysis.
