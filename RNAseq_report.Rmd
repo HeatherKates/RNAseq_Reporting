@@ -25,8 +25,6 @@ library(edgeR)
 library(qs)
 library(kableExtra)
 source("HRK_funcs.R")
-library(plotly)
-library(htmltools)
 library(downloadthis, lib.loc = "~/R/x86_64-pc-linux-gnu-library/4.2/")
 select <- dplyr::select
 ```
@@ -342,7 +340,7 @@ grid.arrange(img, plot_sa_grob, ncol = 2)
 
 Differential expression analysis was performed using limma v3.5 (Ritchie et al. 2015). Raw RNA-seq counts were filtered using NOISeq v2.4 (Tarazona et al., 2011) to remove features that have an average expression per condition less than 1 cpm a coefficient of variation > 100% in all the conditions. To account for differences in sequencing depth and composition bias, TMM normalization as implemented in edgeR v3.4 (Robinson et al. 2010) was used to calculate normalization factors that were used during voom transformation. A linear model was fitted to the transformed data, and pairwise comparisons between conditions were assessed by computing moderated t-statistics, moderated F-statistic, and log-odds of differential expression with empirical Bayes moderation of the standard errors. Statistical significance was assessed using adjusted p-values to control the false discovery rate (FDR).
 
-```{r}
+```{r,results='asis'}
 # Print the number of contrasts tested
 cat(paste0(length(names(efit_list)), " contrasts were tested:"))
 
@@ -362,9 +360,7 @@ Not Significant: adj. p value > 0.05 **AND/OR** abs(logFC) > 0.58
 ```{r DE_summary_all, echo=FALSE, results='asis'}
 tagList(
   lapply(seq_along(efit_list), function(i) {
-    contrast <- names(efit_list)[i]  # Capture contrast name
-    force(contrast)  # Ensures contrast is evaluated
-    display_de_summary(efit_list[[i]])  # Directly return the datatable
+    display_de_summary(efit_list[[i]],contrast=names(efit_list)[i])  # Directly return the datatable
   })
 )
 ```
@@ -378,7 +374,6 @@ tagList(
 tagList(
   lapply(seq_along(efit_list), function(i) {
     contrast_name <- gsub("^X| X", "", names(efit_list)[i])
-    force(contrast)  # Ensures contrast is evaluated
     display_de_result_table(efit_list[[i]], contrast_name = contrast_name)  # Directly return the datatable
   })
 )

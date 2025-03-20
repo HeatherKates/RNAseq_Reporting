@@ -606,7 +606,7 @@ library(limma)
 library(dplyr)
 library(tidyr)
 
-display_de_summary <- function(efit, lfc = 0.58, pval = 0.05, adjust_method = "BH") {
+display_de_summary <- function(efit, lfc = 0.58, pval = 0.05, adjust_method = "BH",contrast) {
   # Step 1: Get summary of DE results (produces a table object)
   de_summary <- summary(decideTests(efit, lfc = lfc, adjust.method = adjust_method, p.value = pval))
   
