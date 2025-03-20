@@ -182,6 +182,40 @@ non_DE_entrezIDs_list <- setNames(
     paste0(".nonDE")
 )
 
+#Extract and format gene lists specified in report_params$gene_lists
+
+# Identify all gene lists available in the session
+all_entrez_lists <- ls(pattern = "entrez")
+entrez_lists <- all_entrez_lists[sapply(all_entrez_lists, function(x) is.list(get(x)))]
+
+# Extract user-specified gene lists from report_params
+specified_gene_lists <- report_params$gene_lists
+
+# Create a structured named list for gene sets, keeping groups separate
+gene_lists <- list()
+
+for (pattern_vec in specified_gene_lists) {
+  pattern <- pattern_vec[[1]]  # Extract pattern from list
+  regex_pattern <- gsub("\\*", ".*", pattern)  # Convert wildcard to regex
+  
+  # Find matching objects
+  matching_objects <- entrez_lists[grepl(regex_pattern, entrez_lists)]
+  
+  # Store matching objects in a **sub-list** within gene_lists
+  gene_lists[[pattern]] <- list()  
+  
+  if (length(matching_objects) > 0) {
+    for (list_name in matching_objects) {
+      contrast_names <- names(get(list_name))
+      
+      for (contrast in contrast_names) {
+        gene_lists[[pattern]][[contrast]] <- get(list_name)[[contrast]]
+      }
+    }
+  }
+}
+
+# Save universe for enrichment funcs
 universe_entrez <- mapIds(
   annotation_obj,
   keys = rownames(DGE.NOIseqfilt),  # Ensembl universe
@@ -190,6 +224,7 @@ universe_entrez <- mapIds(
   multiVals = "first"
 )
 
+# Rename some objs to work with exisiting .Rmd code
 dge_list_edgeR <- DGE.edgeRfilt
 dge_list_raw <- DGE
 dge_list_NOISeq <- DGE.NOIseqfilt
