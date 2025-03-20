@@ -362,7 +362,8 @@ Not Significant: adj. p value > 0.05 **AND/OR** abs(logFC) > 0.58
 ```{r DE_summary_all, echo=FALSE, results='asis'}
 tagList(
   lapply(seq_along(efit_list), function(i) {
-    contrast <- names(efit_list)[i]
+    contrast <- names(efit_list)[i]  # Capture contrast name
+    force(contrast)  # Ensures contrast is evaluated
     display_de_summary(efit_list[[i]])  # Directly return the datatable
   })
 )
@@ -377,6 +378,7 @@ tagList(
 tagList(
   lapply(seq_along(efit_list), function(i) {
     contrast_name <- gsub("^X| X", "", names(efit_list)[i])
+    force(contrast)  # Ensures contrast is evaluated
     display_de_result_table(efit_list[[i]], contrast_name = contrast_name)  # Directly return the datatable
   })
 )
