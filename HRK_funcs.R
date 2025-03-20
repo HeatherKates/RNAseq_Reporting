@@ -826,3 +826,51 @@ plot_pca_by_contrast <- function(dge_list, contrast_name, group_var) {
   return(combined_plot)
 }
 
+# Function to extract top DE genes and convert to Entrez IDs
+top_DE_entrezIDs <- function(df, direction = "up") {
+  if (direction == "up") {
+    filtered_genes <- df %>% filter(logFC > 0.58 & adj.P.value < 0.05)
+  } else if (direction == "down") {
+    filtered_genes <- df %>% filter(logFC < -0.58 & adj.P.value < 0.05)
+  } else {
+    stop("Invalid direction. Choose either 'up' or 'down'.")
+  }
+  
+  # Return empty vector if no significant genes
+  if (nrow(filtered_genes) == 0) {
+    return(character(0))  # Empty list instead of failure
+  }
+  
+  entrez_ids <- mapIds(
+    annotation_obj,
+    keys = filtered_genes$ensembleID,
+    column = "ENTREZID",
+    keytype = "ENSEMBL",
+    multiVals = "first"
+  )
+  
+  return(entrez_ids)
+}
+
+# Function to extract top DE genes and convert to Entrez IDs
+non_DE_entrezIDs <- function(df) {
+    filtered_genes <- df %>% filter(adj.P.value > 0.05|abs(logFC) < 0.58)
+  
+  # Return empty vector if no significant genes
+  if (nrow(filtered_genes) == 0) {
+    return(character(0))  # Empty list instead of failure
+  }
+  
+  entrez_ids <- mapIds(
+    annotation_obj,
+    keys = filtered_genes$ensembleID,
+    column = "ENTREZID",
+    keytype = "ENSEMBL",
+    multiVals = "first"
+  )
+  
+  return(entrez_ids)
+}
+
+
+
