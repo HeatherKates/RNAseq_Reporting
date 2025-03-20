@@ -112,18 +112,23 @@ dev.off()  # Close PNG device
 # Fit linear model
 vfit <- lmFit(v, design.mat)
 
-# Extract unique contrast strings and split multiple contrasts in each entry
+# Extract unique contrast names
 contrast_strings <- unique(unlist(strsplit(DGE.NOIseqfilt$samples$Contrast, ";")))
 
-# Create a named list of contrasts dynamically
+# Generate contrast list
 contrasts_list <- setNames(
   lapply(contrast_strings, function(contrast) {
-    groups <- unlist(strsplit(contrast, "-"))  # Split into individual groups
-    makeContrasts(contrasts = paste0(groups[1], " - ", groups[2]), 
-                  levels = colnames(coef(vfit)))  # Use levels from vfit
+    groups <- trimws(unlist(strsplit(contrast, "-")))  # Remove whitespace
+    
+    print(paste("Processing contrast:", paste(groups, collapse = " - ")))  # Debugging step
+    
+    # Directly pass the contrast formula (no eval/parse needed!)
+    makeContrasts(contrasts = paste(groups[1], "-", groups[2]), 
+                  levels = colnames(vfit$design))
   }),
-  paste0(gsub("-", "_vs_", contrast_strings))  # Name informatively
+  paste0(gsub("-", "_vs_", contrast_strings))  # Clean names for list elements
 )
+
 
 # Print the list to check
 print(contrasts_list)
