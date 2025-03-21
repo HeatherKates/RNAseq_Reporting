@@ -189,7 +189,7 @@ all_entrez_lists <- ls(pattern = "entrez")
 entrez_lists <- all_entrez_lists[sapply(all_entrez_lists, function(x) is.list(get(x)))]
 
 # Extract user-specified gene lists from report_params
-specified_gene_lists <- report_params$gene_lists
+specified_gene_lists <- eval(parse(text = report_params$gene_lists))
 
 # Create a structured named list for gene sets, keeping groups separate
 gene_lists <- list()
