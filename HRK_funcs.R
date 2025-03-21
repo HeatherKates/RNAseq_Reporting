@@ -148,7 +148,7 @@ generate_enrichment_plot <- function(gene_lists, de_results_df, universe_entrez,
                          name = "p.adjust") +  
     guides(color = guide_colorbar(title = "p.adjust")) +  
     ggtitle(paste("GO Term Enrichment (", ont_category, ")", sep = "")) +
-    xlab("DE Gene list (p.adj < 0.05, abs(log2FC) > 0.58)") +
+    xlab("Gene list") +
     ylab("GO Term") +
     theme_minimal() +
     theme(
@@ -338,7 +338,7 @@ generate_kegg_enrichment_plot <- function(gene_lists, de_results_df, universe_en
     scale_color_gradient(low = "red", high = "blue", name = "p.adjust") +  
     guides(color = guide_colorbar(title = "p.adjust")) +  
     ggtitle("KEGG Pathway Enrichment") +
-    xlab("DE Gene list (p.adj < 0.05, abs(log2FC) > 0.58)") +
+    xlab("Gene list") +
     ylab("KEGG Pathway") +
     theme_minimal()+
     theme(
