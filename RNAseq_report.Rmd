@@ -9,7 +9,7 @@ output:
     highlight: tango
     code_folding: none
 params:
-    args: ''
+  params_file: 
 pandoc_args: 
   - "+RTS" 
   - "-K16000m"
@@ -26,6 +26,7 @@ library(limma)
 library(edgeR)
 library(qs)
 library(kableExtra)
+library(yaml)
 source("HRK_funcs.R")
 library(downloadthis, lib.loc = "~/R/x86_64-pc-linux-gnu-library/4.2/")
 select <- dplyr::select
@@ -50,9 +51,8 @@ parse_params <- function(filepath) {
   return(param_list)
 }
 
-# Load the parameters
-args <-  params$args
-report_params <- parse_params(args[1])
+# Read the params file name from the YAML params
+report_params <- parse_params(params$params_file)
 ```
 
 ```{r}
@@ -464,61 +464,39 @@ Gene Ontology enrichment was performed using the enrichGO function in clusterPro
 To assess similiarities between gene lists' enrichment results, if a gene list(s) had significant results for a different gene lists' top-10 term, that result is displayed as well regardless of whether or not the result was in top 10. **Downloadable results excel file** include all significant results for all gene lists.
 
 ```{r GO result}
-GO_results_list <- list()
+# Extract all interactive plots into a list
+interactive_plot_list <- lapply(names(GO_results_list), function(name) {
+  GO_results_list[[name]]$interactive_plot
+})
 
-# Loop through all gene lists
-for (list_name in names(all_results)) {
-  
-  cat("\n\n## Gene Ontology (GO) Enrichment: ", list_name, "\n\n")
-  
-  # Loop through GO categories (BP, MF, CC)
-  for (ont in c("BP", "MF", "CC")) {
-    
-    # Extract results
-    go_result <- all_results[[list_name]]$GO[[paste0(ont, "_results")]]
-    
-    if (!is.null(go_result)) {
-      
-      # Print section header dynamically
-      cat("\n\n### GO ", ont, " Enrichment \n\n")
-      
-      # store for later use in `lapply()`
-      GO_results_list[[paste0(list_name, "_", ont)]] <- go_result
-    }
-  }
-}
-# clean names
-names(GO_results_list) <- gsub("\\*","",names(GO_results_list))
-
-# Download GO results as an excel file
+# Extract the go_results data frames from GO_results_list
 GO_results_df_list <- lapply(GO_results_list, function(result) result$go_results)
 
-# Name the extracted data frames correctly
+# Name the extracted data frames correctly (each sheet in the Excel file)
 names(GO_results_df_list) <- names(GO_results_list)
 
 # Use `download_this()` to allow downloading of only the GO results
-GO_results_df_list %>% downloadthis::download_this(
+download_button <- GO_results_df_list %>% downloadthis::download_this(
   output_name = "GO_results",
   output_extension = ".xlsx",
-  button_label = "Download GO results",
+  button_label = "Download GO enrichment results for all GO categories and all contrasts",
   button_type = "primary",
   has_icon = TRUE,
   icon = "fa fa-save"
 )
 
-#Static plot downloads
-lapply(names(GO_results_list), function(name) {
+# Render the download button separately
+div(download_button, style = "margin-bottom: 20px;")
+
+# Render static plot download buttons, ensuring each is on its own line
+unlist(lapply(names(GO_results_list), function(name) {
   result <- GO_results_list[[name]]
-  download_button_png(result$static_plot, paste0(name, "_GO_enrich_plot"), height = 12)
-})
+  div(download_button_png(result$static_plot, paste0(name, "_GO_enrich_plot"), height = 12), 
+      style = "margin-bottom: 10px;")
+}), recursive = FALSE)
 
-# Store all interactive plots in a list
-interactive_plot_list <- lapply(names(GO_results_list), function(name) {
-  GO_results_list[[name]]$interactive_plot
-})
+interactive_plot_list
 
-# Render all plots properly
-tagList(interactive_plot_list)
 ```
 
 ## KEGG Pathway Enrichment Analysis
@@ -540,7 +518,7 @@ for (list_name in names(all_results)) {
   
   if (!is.null(kegg_result)) {
     
-    # Store for later use
+    # Store results for later use
     KEGG_results_list[[list_name]] <- kegg_result
   }
 }
@@ -550,33 +528,40 @@ names(KEGG_results_list) <- gsub("\\*", "", names(KEGG_results_list))
 
 # Download KEGG results as an Excel file
 KEGG_results_df_list <- lapply(KEGG_results_list, function(result) result$kegg_results)
-
-# Name the extracted data frames correctly
 names(KEGG_results_df_list) <- names(KEGG_results_list)
 
-# Use `download_this()` to allow downloading of only the KEGG results
-KEGG_results_df_list %>% downloadthis::download_this(
+# Extract all interactive plots into a list
+interactive_plot_list <- lapply(names(KEGG_results_list), function(name) {
+  KEGG_results_list[[name]]$interactive_plot
+})
+
+# Extract the go_results data frames from GO_results_list
+KEGG_results_df_list <- lapply(KEGG_results_list, function(result) result$kegg_results)
+
+# Name the extracted data frames correctly (each sheet in the Excel file)
+names(KEGG_results_df_list) <- names(KEGG_results_list)
+
+# Use `download_this()` to allow downloading of only the GO results
+download_button <- KEGG_results_df_list %>% downloadthis::download_this(
   output_name = "KEGG_results",
   output_extension = ".xlsx",
-  button_label = "Download KEGG results",
+  button_label = "Download KEGG enrichment results for all contrasts",
   button_type = "primary",
   has_icon = TRUE,
   icon = "fa fa-save"
 )
 
-# Static plot downloads
-lapply(names(KEGG_results_list), function(name) {
+# Render the download button separately
+div(download_button, style = "margin-bottom: 20px;")
+
+# Render static plot download buttons, ensuring each is on its own line
+unlist(lapply(names(KEGG_results_list), function(name) {
   result <- KEGG_results_list[[name]]
-  download_button_png(result$static_plot, paste0(name, "_KEGG_enrich_plot"), height = 12)
-})
+  div(download_button_png(result$static_plot, paste0(name, "_KEGG_enrich_plot"), height = 12), 
+      style = "margin-bottom: 10px;")
+}), recursive = FALSE)
 
-# Store all interactive plots in a list
-kegg_interactive_plot_list <- lapply(names(KEGG_results_list), function(name) {
-  KEGG_results_list[[name]]$interactive_plot
-})
-
-# Render all plots properly
-tagList(kegg_interactive_plot_list)
+interactive_plot_list
 ```
 
 # References
